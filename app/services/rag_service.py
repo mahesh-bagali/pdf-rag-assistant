@@ -19,7 +19,7 @@ TABLE_NAME = "pdf_documents_v2"
 
 def answer_question(question: str, user_id: int):
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models.gemini-embedding-001"
+        model="gemini-embedding-001"
     )
 
     query_embedding = embeddings.embed_query(question)

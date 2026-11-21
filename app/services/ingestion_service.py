@@ -117,7 +117,7 @@ def ingest_pdf(
             raise ValueError("No readable text found in the PDF.")
 
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models.gemini-embedding-001"
+            model="gemini-embedding-001"
         )
 
         texts = [chunk.page_content for chunk in chunks]
