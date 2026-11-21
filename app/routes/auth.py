@@ -1,4 +1,5 @@
 
+import logging
 import os
 import secrets
 
@@ -24,6 +25,8 @@ from app.services.auth_service import (
 )
 from app.services.auth_dependencies import get_current_user
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/auth",
@@ -127,7 +130,12 @@ def google_login(
             client_id
         )
 
-    except (ValueError, GoogleAuthError):
+    except (ValueError, GoogleAuthError) as error:
+        logger.exception(
+            "Google ID token verification failed: %s",
+            type(error).__name__
+        )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Google ID token."
@@ -165,7 +173,7 @@ def google_login(
         except Exception:
             session.rollback()
 
-            # Handle a possible simultaneous account creation.
+            # Handle possible simultaneous account creation.
             user = session.exec(statement).first()
 
             if user is None:
