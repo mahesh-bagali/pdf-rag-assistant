@@ -15,6 +15,7 @@ st.set_page_config(
 defaults = {
     "access_token": None,
     "user_email": None,
+    "auth_method": None,
     "messages": [],
     "conversation_id": None,
     "uploaded_files": [],
@@ -27,6 +28,9 @@ for key, value in defaults.items():
 
 
 def auth_headers():
+    if not st.session_state.access_token:
+        return {}
+
     return {
         "Authorization": f"Bearer {st.session_state.access_token}"
     }
@@ -46,8 +50,14 @@ def api_request(method, endpoint, **kwargs):
 
 
 def logout():
-    for key in defaults:
-        st.session_state[key] = defaults[key]
+    method = st.session_state.auth_method
+
+    for key, value in defaults.items():
+        st.session_state[key] = value
+
+    if method == "google" or st.user.is_logged_in:
+        st.logout()
+
     st.rerun()
 
 
@@ -64,25 +74,104 @@ def check_backend():
         return False
 
 
-# ---------------- AUTHENTICATION ----------------
+# ---------------- GOOGLE AUTHENTICATION ----------------
+
+if st.user.is_logged_in:
+
+    if not st.session_state.access_token:
+
+        st.title("📚 PDF RAG Assistant")
+
+        try:
+            google_id_token = st.user.tokens["id"]
+
+            with st.spinner("Verifying your Google account..."):
+                response = requests.post(
+                    f"{API_URL}/auth/google",
+                    json={"id_token": google_id_token},
+                    timeout=30
+                )
+
+            if response.status_code == 200:
+                st.session_state.access_token = (
+                    response.json()["access_token"]
+                )
+                st.session_state.user_email = st.user.email
+                st.session_state.auth_method = "google"
+                st.rerun()
+
+            else:
+                st.error(
+                    f"Google authentication failed: {response.text}"
+                )
+
+                if st.button("Try again"):
+                    st.rerun()
+
+                if st.button("Sign out"):
+                    st.logout()
+
+                st.stop()
+
+        except KeyError:
+            st.error(
+                "Google ID token is unavailable. "
+                "Check expose_tokens = [\"id\"] in Streamlit secrets."
+            )
+
+            if st.button("Sign out"):
+                st.logout()
+
+            st.stop()
+
+        except requests.RequestException:
+            st.error("Cannot connect to the authentication server.")
+
+            if st.button("Retry"):
+                st.rerun()
+
+            st.stop()
+
+
+# ---------------- LOGIN SCREEN ----------------
 
 if not st.session_state.access_token:
 
     st.title("📚 PDF RAG Assistant")
     st.caption("Your personal document question-answering assistant")
 
-    login_tab, register_tab = st.tabs(["Login", "Create Account"])
+    st.subheader("Sign in to continue")
+
+    st.button(
+        "Continue with Google",
+        on_click=st.login,
+        use_container_width=True
+    )
+
+    st.divider()
+    st.caption("Or use email and password")
+
+    login_tab, register_tab = st.tabs(
+        ["Login", "Create Account"]
+    )
 
     with login_tab:
+
         with st.form("login_form"):
+
             email = st.text_input("Email")
-            password = st.text_input("Password", type="password")
+            password = st.text_input(
+                "Password",
+                type="password"
+            )
+
             submitted = st.form_submit_button(
                 "Login",
                 use_container_width=True
             )
 
         if submitted:
+
             try:
                 response = requests.post(
                     f"{API_URL}/auth/login",
@@ -94,40 +183,61 @@ if not st.session_state.access_token:
                 )
 
                 if response.status_code == 200:
+
                     st.session_state.access_token = (
                         response.json()["access_token"]
                     )
+
                     st.session_state.user_email = email
+                    st.session_state.auth_method = "password"
+
                     st.success("Login successful!")
                     st.rerun()
+
                 else:
-                    st.error(response.json().get("detail", "Login failed."))
+                    st.error(
+                        response.json().get(
+                            "detail",
+                            "Login failed."
+                        )
+                    )
 
             except requests.RequestException as error:
                 st.error(f"Backend connection failed: {error}")
 
     with register_tab:
+
         with st.form("register_form"):
+
             new_email = st.text_input("Email address")
+
             new_password = st.text_input(
                 "Password (minimum 8 characters)",
                 type="password"
             )
+
             confirm_password = st.text_input(
                 "Confirm password",
                 type="password"
             )
+
             register = st.form_submit_button(
                 "Create Account",
                 use_container_width=True
             )
 
         if register:
+
             if new_password != confirm_password:
                 st.error("Passwords do not match.")
+
             elif len(new_password) < 8:
-                st.error("Password must contain at least 8 characters.")
+                st.error(
+                    "Password must contain at least 8 characters."
+                )
+
             else:
+
                 try:
                     response = requests.post(
                         f"{API_URL}/auth/register",
@@ -139,7 +249,10 @@ if not st.session_state.access_token:
                     )
 
                     if response.status_code == 201:
-                        st.success("Account created! Please log in.")
+                        st.success(
+                            "Account created! Please log in."
+                        )
+
                     else:
                         st.error(
                             response.json().get(
@@ -149,18 +262,28 @@ if not st.session_state.access_token:
                         )
 
                 except requests.RequestException as error:
-                    st.error(f"Backend connection failed: {error}")
+                    st.error(
+                        f"Backend connection failed: {error}"
+                    )
 
     st.stop()
 
 
-# ---------------- VERIFY TOKEN ----------------
+# ---------------- VERIFY BACKEND TOKEN ----------------
 
 try:
-    profile_response = api_request("GET", "/auth/me")
 
-    if profile_response.status_code != 200:
+    profile_response = api_request(
+        "GET",
+        "/auth/me"
+    )
+
+    if profile_response.status_code == 401:
         logout()
+
+    elif profile_response.status_code != 200:
+        st.error("Could not verify your account.")
+        st.stop()
 
 except requests.RequestException:
     st.error("Cannot connect to the backend.")
@@ -170,16 +293,24 @@ except requests.RequestException:
 # ---------------- API FUNCTIONS ----------------
 
 def get_conversations():
+
     try:
-        response = api_request("GET", "/conversations")
+        response = api_request(
+            "GET",
+            "/conversations"
+        )
+
         if response.status_code == 200:
             return response.json()
+
     except requests.RequestException:
         pass
+
     return []
 
 
 def load_conversation(conversation_id):
+
     try:
         response = api_request(
             "GET",
@@ -187,8 +318,11 @@ def load_conversation(conversation_id):
         )
 
         if response.status_code == 200:
+
             result = response.json()
+
             st.session_state.conversation_id = result["id"]
+
             st.session_state.messages = [
                 {
                     "role": message["role"],
@@ -197,7 +331,9 @@ def load_conversation(conversation_id):
                 }
                 for message in result["messages"]
             ]
+
             st.rerun()
+
         else:
             st.error(response.text)
 
@@ -206,6 +342,7 @@ def load_conversation(conversation_id):
 
 
 def delete_conversation():
+
     conversation_id = st.session_state.conversation_id
 
     if conversation_id is None:
@@ -218,10 +355,13 @@ def delete_conversation():
         )
 
         if response.status_code == 200:
+
             st.session_state.conversation_id = None
             st.session_state.messages = []
+
             st.success("Conversation deleted.")
             st.rerun()
+
         else:
             st.error(response.text)
 
@@ -234,24 +374,35 @@ def delete_conversation():
 with st.sidebar:
 
     st.title("📚 PDF Assistant")
-    st.caption(f"Logged in as {st.session_state.user_email}")
 
-    if st.button("Logout", use_container_width=True):
+    st.caption(
+        f"Logged in as {st.session_state.user_email}"
+    )
+
+    if st.button(
+        "Logout",
+        use_container_width=True
+    ):
         logout()
 
     st.divider()
 
-    if st.button("＋ New Chat", use_container_width=True):
+    if st.button(
+        "＋ New Chat",
+        use_container_width=True
+    ):
         st.session_state.conversation_id = None
         st.session_state.messages = []
         st.rerun()
 
     st.divider()
+
     st.subheader("Chat History")
 
     conversations = get_conversations()
 
     for conversation in conversations:
+
         if st.button(
             conversation["title"][:35],
             key=f"conversation_{conversation['id']}",
@@ -260,10 +411,12 @@ with st.sidebar:
             load_conversation(conversation["id"])
 
     if st.session_state.conversation_id is not None:
+
         if st.button("🗑️ Delete Current Chat"):
             delete_conversation()
 
     st.divider()
+
     st.subheader("Upload PDF")
 
     uploaded_file = st.file_uploader(
@@ -271,14 +424,20 @@ with st.sidebar:
         type=["pdf"]
     )
 
-    if st.button("Upload PDF", use_container_width=True):
+    if st.button(
+        "Upload PDF",
+        use_container_width=True
+    ):
 
         if uploaded_file is None:
             st.warning("Please select a PDF first.")
 
         else:
+
             try:
+
                 with st.spinner("Processing PDF..."):
+
                     response = api_request(
                         "POST",
                         "/documents/upload",
@@ -292,22 +451,35 @@ with st.sidebar:
                     )
 
                 if response.status_code == 200:
+
                     result = response.json()
+
                     st.success("PDF uploaded successfully!")
-                    st.write(f"Pages: {result['pages_processed']}")
-                    st.write(f"Chunks: {result['chunks_created']}")
+
+                    st.write(
+                        f"Pages: {result['pages_processed']}"
+                    )
+
+                    st.write(
+                        f"Chunks: {result['chunks_created']}"
+                    )
 
                     if uploaded_file.name not in st.session_state.uploaded_files:
+
                         st.session_state.uploaded_files.append(
                             uploaded_file.name
                         )
+
                 else:
-                    st.error(f"Upload failed: {response.text}")
+                    st.error(
+                        f"Upload failed: {response.text}"
+                    )
 
             except requests.RequestException as error:
                 st.error(f"Upload error: {error}")
 
     st.divider()
+
     st.subheader("System Status")
 
     if check_backend():
@@ -319,29 +491,42 @@ with st.sidebar:
 # ---------------- MAIN INTERFACE ----------------
 
 st.title("PDF RAG Assistant")
-st.caption("Upload documents and ask questions about their content.")
+
+st.caption(
+    "Upload documents and ask questions about their content."
+)
 
 st.divider()
+
 st.subheader("💬 Ask your documents")
 
 if not st.session_state.messages:
+
     st.info(
-        "Welcome! Upload a PDF from the sidebar and start asking questions."
+        "Welcome! Upload a PDF from the sidebar "
+        "and start asking questions."
     )
 
+
 for message in st.session_state.messages:
+
     with st.chat_message(message["role"]):
+
         st.markdown(message["content"])
 
         for source in message.get("sources", []):
+
             st.caption(
-                f"📄 {source['pdf_name']} — Page {source['page_number']}"
+                f"📄 {source['pdf_name']} "
+                f"— Page {source['page_number']}"
             )
 
 
 # ---------------- QUESTION ANSWERING ----------------
 
-question = st.chat_input("Ask something about your PDFs...")
+question = st.chat_input(
+    "Ask something about your PDFs..."
+)
 
 if question:
 
@@ -356,6 +541,7 @@ if question:
     with st.chat_message("assistant"):
 
         try:
+
             with st.spinner("Searching documents..."):
 
                 response = api_request(
@@ -363,7 +549,9 @@ if question:
                     "/questions/ask",
                     json={
                         "question": question,
-                        "conversation_id": st.session_state.conversation_id
+                        "conversation_id": (
+                            st.session_state.conversation_id
+                        )
                     }
                 )
 
@@ -371,15 +559,19 @@ if question:
 
                 result = response.json()
 
-                st.session_state.conversation_id = result["conversation_id"]
+                st.session_state.conversation_id = (
+                    result["conversation_id"]
+                )
 
                 st.markdown(result["answer"])
 
                 sources = result.get("sources", [])
 
                 for source in sources:
+
                     st.caption(
-                        f"📄 {source['pdf_name']} — Page {source['page_number']}"
+                        f"📄 {source['pdf_name']} "
+                        f"— Page {source['page_number']}"
                     )
 
                 st.session_state.messages.append({
@@ -389,9 +581,17 @@ if question:
                 })
 
             else:
-                st.error(f"API error: {response.text}")
+
+                st.error(
+                    f"API error: {response.text}"
+                )
+
                 st.session_state.messages.pop()
 
         except requests.RequestException as error:
-            st.error(f"Backend connection error: {error}")
+
+            st.error(
+                f"Backend connection error: {error}"
+            )
+
             st.session_state.messages.pop()
