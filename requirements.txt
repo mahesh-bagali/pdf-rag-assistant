@@ -22,3 +22,4 @@ Authlib
 
 pytest
 httpx
+psycopg[binary]
