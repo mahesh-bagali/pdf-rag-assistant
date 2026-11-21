@@ -18,19 +18,14 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "/ask",
-    response_model=QuestionResponse
-)
+@router.post("/ask", response_model=QuestionResponse)
 async def ask_question(
     request: QuestionRequest,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     try:
-        # Find an existing conversation owned by this user
         if request.conversation_id is not None:
-
             statement = select(Conversation).where(
                 Conversation.id == request.conversation_id,
                 Conversation.user_id == current_user.id
@@ -53,7 +48,6 @@ async def ask_question(
             session.add(conversation)
             session.flush()
 
-        # Search only the authenticated user's PDF documents
         result = answer_question(
             question=request.question,
             user_id=current_user.id
@@ -61,7 +55,6 @@ async def ask_question(
 
         sources = result.get("sources", [])
 
-        # Save the user's question
         user_message = Message(
             conversation_id=conversation.id,
             role="user",
@@ -69,7 +62,6 @@ async def ask_question(
             sources="[]"
         )
 
-        # Save the assistant's answer
         assistant_message = Message(
             conversation_id=conversation.id,
             role="assistant",
@@ -99,15 +91,13 @@ async def ask_question(
 
     except FileNotFoundError:
         session.rollback()
-
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="LanceDB database not found. Upload a PDF first."
+            detail="No PDF vector database is available. Upload a PDF first."
         )
 
     except Exception:
         session.rollback()
-
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Question processing failed."

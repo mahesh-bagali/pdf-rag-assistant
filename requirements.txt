@@ -20,6 +20,9 @@ PyJWT
 google-auth
 Authlib
 
+supabase[httpx]
+pgvector
+psycopg[binary]
+
 pytest
 httpx
-psycopg[binary]
