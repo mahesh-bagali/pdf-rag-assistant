@@ -17,6 +17,7 @@ sqlmodel
 
 pwdlib[argon2]
 PyJWT
+google-auth
 
 pytest
 httpx
