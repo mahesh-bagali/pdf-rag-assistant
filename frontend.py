@@ -7,7 +7,7 @@ import streamlit as st
 # Configuration
 # --------------------------------------------------
 
-API_URL = "http://localhost:8002"
+API_URL = "https://pdf-rag-assistant-4a95.onrender.com"
 
 st.set_page_config(
     page_title="PDF RAG Assistant",
