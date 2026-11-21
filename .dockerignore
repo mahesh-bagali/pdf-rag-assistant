@@ -1,0 +1,32 @@
+
+# Environment variables and secrets
+.env
+.env.*
+
+# Python virtual environments
+.venv/
+.venv*/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local vector databases
+.rag_cache/
+chroma_db/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+
+# Test files
+tests/
+
+# Generated files
+*.log

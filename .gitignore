@@ -1,0 +1,31 @@
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+.venv*/
+venv/
+env/
+
+# Databases and vector storage
+.rag_cache/
+chroma_db/
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded documents
+data/
+uploads/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Build files
+build/
+dist/
+*.egg-info/
