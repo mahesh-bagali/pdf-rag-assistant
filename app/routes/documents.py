@@ -1,4 +1,6 @@
 
+import logging
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlmodel import Session, select
 
@@ -6,6 +8,9 @@ from app.database.database import get_session
 from app.database.models import User, UploadedDocument
 from app.services.auth_dependencies import get_current_user
 from app.services.ingestion_service import ingest_pdf
+
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -43,9 +48,10 @@ async def upload_pdf(
             detail=str(error)
         )
     except Exception:
+        logger.exception("PDF ingestion failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="PDF processing failed."
+            detail="PDF processing failed. Check backend logs."
         )
     finally:
         await file.close()
